@@ -1,12 +1,11 @@
 "use client";
-
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-/** ====== Branding / layout ====== */
-const LOGO_SIGLA = "PN"; // sua sigla
+/** =============================
+ *  Tipos e Constantes
+ *  ============================= */
 
-/** ====== Tipos ====== */
 type Market = "Mundial" | "Guanabara" | "Assai";
 type PriceTier = "low" | "mid" | "high";
 
@@ -35,10 +34,10 @@ type Product = {
   id: string; // SKU
   name: string;
   brand: string;
-  category: RawCategory;
+  category: RawCategory; // categoria interna
   unit: string;
   quality: number; // 1..5
-  prices: Record<Market, number>; // preço base por mercado (fallback)
+  prices: Record<Market, number>; // preço base por mercado
 };
 
 type Region = {
@@ -52,7 +51,7 @@ type Region = {
 
 type BasketItem = { id: string; qty: number };
 
-/** ====== Mercados & Regiões ====== */
+const LOGO_SIGLA = "PN"; // sua sigla
 const MARKETS: Market[] = ["Mundial", "Guanabara", "Assai"];
 
 const REGIONS: Region[] = [
@@ -82,12 +81,15 @@ const REGIONS: Region[] = [
   },
 ];
 
-/** ====== Utilitários ====== */
+/** =============================
+ *  Helpers
+ *  ============================= */
+
 function currency(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-// viés comercial: Mundial levemente mais barato
+// viés comercial: Mundial sempre levemente mais barato na simulação
 function marketBias(m: Market) {
   return m === "Mundial" ? 0.985 : 1; // -1.5%
 }
@@ -99,19 +101,25 @@ function regionalPrice(base: number, market: Market, region: Region) {
   ).toFixed(2);
 }
 
-function groupForUI(cat: RawCategory): UIGroup {
+function minPriceAcrossMarkets(p: Product, region: Region) {
+  const vals = MARKETS.map((m) => regionalPrice(p.prices[m], m, region));
+  return Math.min(...vals);
+}
+/** Categoria interna -> nome legível no UI */
+function toUiGroup(cat: RawCategory): UIGroup {
   if (cat === "laticinio") return "Laticínios";
   if (cat === "limpeza") return "Limpeza";
   if (cat === "cozinha") return "Itens de Cozinha";
   if (cat === "padaria") return "Padaria";
-  if (
-    ["carbo", "graos", "gordura", "mercearia_misc", "frutas", "legumes_folhas"].includes(cat)
-  )
+  if (["carbo", "graos", "gordura", "mercearia_misc", "frutas", "legumes_folhas"].includes(cat))
     return "Mercearia";
   return "Mercearia";
 }
 
-/** ====== Itens curados de vitrine ====== */
+/** =============================
+ *  Catálogo Curado + Gerador DEMO
+ *  ============================= */
+
 const CURATED: Product[] = [
   {
     id: "frango_1kg",
@@ -196,12 +204,11 @@ const CURATED: Product[] = [
   },
 ];
 
-/** ====== Gerador DEMO robusto ====== */
 function prng(seed: number) {
   let x = seed || 123456789;
-  return () =>
-    ((x ^= x << 13), (x ^= x >>> 17), (x ^= x << 5), (x >>> 0) / 0xffffffff);
+  return () => ((x ^= x << 13), (x ^= x >>> 17), (x ^= x << 5), (x >>> 0) / 0xffffffff);
 }
+
 const DEMO_BRANDS = [
   "Seara",
   "Perdigão",
@@ -223,65 +230,21 @@ const DEMO_BRANDS = [
   "Wickbold",
   "Bauducco",
 ];
+
 const NAME_SETS: Record<RawCategory, string[]> = {
-  proteina: [
-    "Frango",
-    "Peito de Frango",
-    "Coxa/Sobrecoxa",
-    "Carne Moída",
-    "Filé Tilápia",
-    "Atum Lata",
-    "Sardinha Lata",
-    "Ovos",
-  ],
-  laticinio: [
-    "Iogurte",
-    "Iogurte Natural",
-    "Leite",
-    "Queijo Minas",
-    "Requeijão",
-    "Manteiga",
-    "Queijo Branco",
-  ],
+  proteina: ["Frango", "Peito de Frango", "Coxa/Sobrecoxa", "Carne Moída", "Filé Tilápia", "Atum Lata", "Sardinha Lata", "Ovos"],
+  laticinio: ["Iogurte", "Iogurte Natural", "Leite", "Queijo Minas", "Requeijão", "Manteiga", "Queijo Branco"],
   carbo: ["Arroz", "Arroz Integral", "Feijão", "Macarrão", "Tapioca"],
   graos: ["Aveia", "Granola", "Chia", "Quinoa", "Linhaça"],
   gordura: ["Azeite", "Óleo Girassol", "Óleo Soja", "Ghee"],
   legumes_folhas: ["Brócolis", "Couve-flor", "Alface", "Couve", "Abobrinha", "Cenoura"],
   frutas: ["Banana", "Maçã", "Laranja", "Mamão", "Uva", "Pera"],
-  limpeza: [
-    "Detergente",
-    "Sabão em Pó",
-    "Amaciante",
-    "Água Sanitária",
-    "Desinfetante",
-    "Limpador Multiuso",
-    "Esponja Aço",
-  ],
-  cozinha: [
-    "Esponja Multiuso",
-    "Pano de Prato",
-    "Luva de Borracha",
-    "Rolo Filme PVC",
-    "Saco Lixo 50L",
-    "Esponja Antirriscos",
-  ],
-  padaria: [
-    "Pão Integral",
-    "Pão Francês",
-    "Pão de Forma",
-    "Biscoito Cream Cracker",
-    "Bolo Pullman",
-    "Torrada",
-  ],
-  mercearia_misc: [
-    "Molho de Tomate",
-    "Milho Lata",
-    "Ervilha Lata",
-    "Azeitona Vidro",
-    "Atum Ralado",
-    "Sardinha Molho",
-  ],
+  limpeza: ["Detergente", "Sabão em Pó", "Amaciante", "Água Sanitária", "Desinfetante", "Limpador Multiuso", "Esponja Aço"],
+  cozinha: ["Esponja Multiuso", "Pano de Prato", "Luva de Borracha", "Rolo Filme PVC", "Saco Lixo 50L", "Esponja Antirriscos"],
+  padaria: ["Pão Integral", "Pão Francês", "Pão de Forma", "Biscoito Cream Cracker", "Bolo Pullman", "Torrada"],
+  mercearia_misc: ["Molho de Tomate", "Milho Lata", "Ervilha Lata", "Azeitona Vidro", "Atum Ralado", "Sardinha Molho"],
 };
+
 const RAW_CATS: RawCategory[] = [
   "proteina",
   "laticinio",
@@ -295,6 +258,7 @@ const RAW_CATS: RawCategory[] = [
   "padaria",
   "mercearia_misc",
 ];
+
 function makeSku(i: number) {
   return "SKU" + String(i).padStart(6, "0");
 }
@@ -315,62 +279,39 @@ function generateDemoCatalog(region: Region, total = 12000): Product[] {
     const baseName = pick(rng, NAME_SETS[cat]);
     const brand = pick(rng, DEMO_BRANDS);
     const unit =
-      cat === "proteina"
-        ? "1 kg"
-        : cat === "laticinio"
-        ? "500 g"
-        : cat === "carbo"
-        ? "1 kg"
-        : cat === "graos"
-        ? "500 g"
-        : cat === "gordura"
-        ? "500 ml"
-        : cat === "limpeza"
-        ? rng() < 0.5
-          ? "500 ml"
-          : "1 L"
-        : cat === "cozinha"
-        ? rng() < 0.5
-          ? "2 un"
-          : "1 rolo"
-        : cat === "padaria"
-        ? "500 g"
-        : cat === "mercearia_misc"
-        ? "340 g"
-        : "1 un";
+      cat === "proteina" ? "1 kg" :
+      cat === "laticinio" ? "500 g" :
+      cat === "carbo" ? "1 kg" :
+      cat === "graos" ? "500 g" :
+      cat === "gordura" ? "500 ml" :
+      cat === "limpeza" ? (rng() < 0.5 ? "500 ml" : "1 L") :
+      cat === "cozinha" ? (rng() < 0.5 ? "2 un" : "1 rolo") :
+      cat === "padaria" ? "500 g" :
+      cat === "mercearia_misc" ? "340 g" :
+      "1 un";
 
     const quality = Math.max(1, Math.min(5, Math.round(randRange(rng, 2.5, 4.8))));
     const base =
-      cat === "proteina"
-        ? randRange(rng, 12, 45)
-        : cat === "laticinio"
-        ? randRange(rng, 6, 30)
-        : cat === "carbo"
-        ? randRange(rng, 5, 18)
-        : cat === "graos"
-        ? randRange(rng, 6, 28)
-        : cat === "gordura"
-        ? randRange(rng, 12, 45)
-        : cat === "legumes_folhas"
-        ? randRange(rng, 3, 12)
-        : cat === "frutas"
-        ? randRange(rng, 4, 14)
-        : cat === "limpeza"
-        ? randRange(rng, 3, 35)
-        : cat === "cozinha"
-        ? randRange(rng, 4, 28)
-        : cat === "padaria"
-        ? randRange(rng, 6, 24)
-        : randRange(rng, 5, 20);
+      cat === "proteina" ? randRange(rng, 12, 45) :
+      cat === "laticinio" ? randRange(rng, 6, 30) :
+      cat === "carbo" ? randRange(rng, 5, 18) :
+      cat === "graos" ? randRange(rng, 6, 28) :
+      cat === "gordura" ? randRange(rng, 12, 45) :
+      cat === "legumes_folhas" ? randRange(rng, 3, 12) :
+      cat === "frutas" ? randRange(rng, 4, 14) :
+      cat === "limpeza" ? randRange(rng, 3, 35) :
+      cat === "cozinha" ? randRange(rng, 4, 28) :
+      cat === "padaria" ? randRange(rng, 6, 24) :
+      randRange(rng, 5, 20);
 
-    const brandAdj = 1 + ((DEMO_BRANDS.indexOf(brand) % 5) * 0.015);
+    const brandAdj = 1 + (DEMO_BRANDS.indexOf(brand) % 5) * 0.015;
     const pM = +(base * brandAdj * (0.98 + rng() * 0.06)).toFixed(2);
-    const pG = +(base * brandAdj * (0.99 + rng() * 0.07)).toFixed(2); // levemente mais caro
+    const pG = +(base * brandAdj * (0.99 + rng() * 0.07)).toFixed(2);
     const pA = +(base * brandAdj * (0.99 + rng() * 0.08)).toFixed(2);
 
     res.push({
       id: makeSku(i + 1),
-      name: `${baseName} ${unit}`,
+      name: baseName + " " + unit,
       brand,
       category: cat,
       unit,
@@ -381,37 +322,20 @@ function generateDemoCatalog(region: Region, total = 12000): Product[] {
   return res;
 }
 
-/** ====== Preço efetivo (DB override) ====== */
-type DbPriceMap = Record<string, Partial<Record<Market, number>>>; // sku -> {Mundial: 12.9, ...}
+/** =============================
+ *  Página
+ *  ============================= */
 
-function effectiveMarketPrice(
-  p: Product,
-  m: Market,
-  region: Region,
-  skuPriceDb: DbPriceMap
-) {
-  const db = skuPriceDb[p.id]?.[m];
-  const base = typeof db === "number" ? db : p.prices[m];
-  return regionalPrice(base, m, region);
-}
-
-function minEffectivePrice(p: Product, region: Region, skuPriceDb: DbPriceMap) {
-  return Math.min(
-    ...MARKETS.map((m) => effectiveMarketPrice(p, m, region, skuPriceDb))
-  );
-}
-
-/** ====== Página ====== */
 export default function AppPage() {
   /** Localização */
   const [country, setCountry] = useState("Brasil");
   const [stateUF, setStateUF] = useState("RJ");
   const [city, setCity] = useState("Rio de Janeiro");
+
   const currentRegion = useMemo(
     () =>
-      REGIONS.find(
-        (r) => r.country === country && r.state === stateUF && r.city === city
-      ) ?? REGIONS[0],
+      REGIONS.find((r) => r.country === country && r.state === stateUF && r.city === city) ??
+      REGIONS[0],
     [country, stateUF, city]
   );
 
@@ -421,157 +345,61 @@ export default function AppPage() {
 
   /** Entrega e pagamento */
   const [delivery, setDelivery] = useState<"retirada" | "entrega">("retirada");
-  const [payment, setPayment] = useState<
-    "picpay" | "credito" | "debito" | "pix" | "alimentacao"
-  >("pix");
+  const [payment, setPayment] = useState<"picpay" | "credito" | "debito" | "pix" | "alimentacao">("pix");
   const [showCheckout, setShowCheckout] = useState(false);
 
-  /** Catálogo robusto (curados + demo 12k) */
-  const demoCatalog = useMemo(
-    () => generateDemoCatalog(currentRegion, 12000),
-    [currentRegion]
-  );
+  /** Catálogo (curado + demo 12k) */
+  const demoCatalog = useMemo(() => generateDemoCatalog(currentRegion, 12000), [currentRegion]);
   const CATALOG = useMemo(() => {
     const ids = new Set(CURATED.map((p) => p.id));
     return [...CURATED, ...demoCatalog.filter((p) => !ids.has(p.id))];
   }, [demoCatalog]);
 
-  /** DB: mercados, products->sku, latest_prices (view) */
-  const [marketsIndex, setMarketsIndex] = useState<Record<number, string>>({});
-  const [skuPriceDb, setSkuPriceDb] = useState<DbPriceMap>({});
-
-  useEffect(() => {
-    (async () => {
-      // 1) Mercados (índice id -> name)
-      const { data: mkts, error: mErr } = await supabase
-        .from("markets")
-        .select("id, name");
-      if (mErr) {
-        console.error(mErr);
-        return;
-      }
-      const idx: Record<number, string> = {};
-      mkts?.forEach((m: any) => (idx[Number(m.id)] = String(m.name)));
-      setMarketsIndex(idx);
-
-      // 2) Mapa product_id -> sku
-      const { data: prods, error: pErr } = await supabase
-        .from("products")
-        .select("id, sku");
-      if (pErr) {
-        console.error(pErr);
-        return;
-      }
-      const idToSku = new Map<number, string>();
-      prods?.forEach((p: any) => idToSku.set(Number(p.id), String(p.sku)));
-
-      // 3) Últimos preços (view)
-      const { data: latest, error: lErr } = await supabase
-        .from("latest_prices")
-        .select("product_id, market_id, price")
-        .limit(100000);
-      if (lErr) {
-        console.error(lErr);
-        return;
-      }
-
-      // 4) Monta o mapa sku -> { Mercado: preço }
-      const bySku: DbPriceMap = {};
-      latest?.forEach((r: any) => {
-        const sku = idToSku.get(Number(r.product_id));
-        const marketName = idx[Number(r.market_id)] as Market | undefined;
-        const priceNum = Number(r.price);
-        if (!sku || !marketName || !(priceNum >= 0)) return;
-        if (!bySku[sku]) bySku[sku] = {};
-        bySku[sku][marketName] = priceNum;
-      });
-
-      setSkuPriceDb(bySku);
-    })();
-  }, []);
-
-  /** Busca e filtros de vitrine */
-  const GROUPS: UIGroup[] = [
-    "Todos",
-    "Laticínios",
-    "Mercearia",
-    "Limpeza",
-    "Itens de Cozinha",
-    "Padaria",
-  ];
+  /** Vitrine (abas + busca) */
+  const GROUPS: UIGroup[] = ["Todos", "Laticínios", "Mercearia", "Limpeza", "Itens de Cozinha", "Padaria"];
   const [uiGroup, setUiGroup] = useState<UIGroup>("Todos");
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return CATALOG.filter((p) => {
-      const inGroup = uiGroup === "Todos" ? true : groupForUI(p.category) === uiGroup;
+      const inGroup = uiGroup === "Todos" ? true : toUiGroup(p.category) === uiGroup;
       const byQuality = p.quality >= minQuality;
       const bySearch = !q || (p.name + " " + p.brand).toLowerCase().includes(q);
       return inGroup && byQuality && bySearch;
     }).slice(0, 36);
   }, [CATALOG, uiGroup, query, minQuality]);
 
-  /** Cesta personalizada do cliente */
+  /** Cesta do cliente */
   const [basket, setBasket] = useState<BasketItem[]>([]);
-
   function addToBasket(id: string) {
     setBasket((prev) => {
       const found = prev.find((i) => i.id === id);
-      if (found)
-        return prev.map((i) =>
-          i.id === id ? { ...i, qty: Math.min(99, i.qty + 1) } : i
-        );
+      if (found) return prev.map((i) => (i.id === id ? { ...i, qty: Math.min(99, i.qty + 1) } : i));
       return [...prev, { id, qty: 1 }];
     });
   }
   function changeQty(id: string, delta: number) {
-    setBasket((prev) =>
-      prev.map((i) =>
-        i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i
-      )
-    );
+    setBasket((prev) => prev.map((i) => (i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i)));
   }
   function removeItem(id: string) {
     setBasket((prev) => prev.filter((i) => i.id !== id));
   }
 
-  /** Premium: cesta automática */
-  useEffect(() => {
-    if (tier !== "high") return;
-    const auto = CATALOG.filter((p) => p.quality >= 4)
-      .sort(
-        (a, b) =>
-          minEffectivePrice(a, currentRegion, skuPriceDb) -
-          minEffectivePrice(b, currentRegion, skuPriceDb)
-      )
-      .slice(0, 10)
-      .map((p) => ({ id: p.id, qty: 1 }));
-    setBasket(auto);
-    setTimeout(() => {
-      const el = document.getElementById("cesta");
-      if (el) el.scrollIntoView({ behavior: "smooth" });
-    }, 50);
-  }, [tier, CATALOG, currentRegion, skuPriceDb]);
-
-  /** Detalhes de preços por mercado para a cesta */
+  /** Detalhe de preços por mercado para a cesta */
   const basketDetail = useMemo(() => {
     const items = basket
       .map((b) => {
         const p = CATALOG.find((x) => x.id === b.id);
         if (!p) return null;
-        const prices = {
-          Mundial: effectiveMarketPrice(p, "Mundial", currentRegion, skuPriceDb),
-          Guanabara: effectiveMarketPrice(p, "Guanabara", currentRegion, skuPriceDb),
-          Assai: effectiveMarketPrice(p, "Assai", currentRegion, skuPriceDb),
+        const prices: Record<Market, number> = {
+          Mundial: regionalPrice(p.prices.Mundial, "Mundial", currentRegion),
+          Guanabara: regionalPrice(p.prices.Guanabara, "Guanabara", currentRegion),
+          Assai: regionalPrice(p.prices.Assai, "Assai", currentRegion),
         };
         return { product: p, qty: b.qty, prices };
       })
-      .filter(Boolean) as {
-      product: Product;
-      qty: number;
-      prices: Record<Market, number>;
-    }[];
+      .filter(Boolean) as { product: Product; qty: number; prices: Record<Market, number> }[];
 
     const totals = { Mundial: 0, Guanabara: 0, Assai: 0 } as Record<Market, number>;
     items.forEach((it) => {
@@ -579,10 +407,7 @@ export default function AppPage() {
     });
     (MARKETS as Market[]).forEach((m) => (totals[m] = +totals[m].toFixed(2)));
 
-    // taxa de entrega opcional
-    const withDelivery = (m: Market, v: number) =>
-      delivery === "entrega" ? +(v * 1.05).toFixed(2) : v;
-
+    const withDelivery = (m: Market, v: number) => (delivery === "entrega" ? +(v * 1.05).toFixed(2) : v);
     const totalsWithDelivery: Record<Market, number> = {
       Mundial: withDelivery("Mundial", totals.Mundial),
       Guanabara: withDelivery("Guanabara", totals.Guanabara),
@@ -595,7 +420,7 @@ export default function AppPage() {
     );
 
     return { items, totals: totalsWithDelivery, winner };
-  }, [basket, CATALOG, currentRegion, delivery, skuPriceDb]);
+  }, [basket, CATALOG, currentRegion, delivery]);
 
   /** Ação “Enter” → calcular e rolar */
   const [showResult, setShowResult] = useState(false);
@@ -615,11 +440,10 @@ export default function AppPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [basket]);
 
-  /** Mapas: link leve */
+  /** Mapas */
   function mapsUrl(market: Market) {
-    const qCity = encodeURIComponent(`${market} perto de ${city} ${stateUF}`);
-    return `https://www.google.com/maps/search/?q=${qCity}`;
-    // sem API: não trava o app
+    const qCity = encodeURIComponent(market + " perto de " + city + " " + stateUF);
+    return "https://www.google.com/maps/search/?q=" + qCity;
   }
 
   /** Checkout simulado */
@@ -627,32 +451,31 @@ export default function AppPage() {
     const order = {
       createdAt: new Date().toISOString(),
       region: currentRegion,
-      deliveryMode: delivery, // retirada | entrega
+      deliveryMode: delivery,
       deliveryFeePct: delivery === "entrega" ? 0.05 : 0,
       payment,
       winner: basketDetail.winner,
       totals: basketDetail.totals,
-      items: basketDetail.items.map((i) => ({
-        sku: i.product.id,
-        name: i.product.name,
-        qty: i.qty,
-      })),
+      items: basketDetail.items.map((i) => ({ sku: i.product.id, name: i.product.name, qty: i.qty })),
     };
-    const blob = new Blob([JSON.stringify(order, null, 2)], {
-      type: "application/json",
-    });
+    const blob = new Blob([JSON.stringify(order, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `pedido-${Date.now()}.json`;
+    a.download = "pedido-" + Date.now() + ".json";
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
     setShowCheckout(true);
   }
 
-  /** ====== UI ====== */
+  /** =============================
+   *  UI
+   *  ============================= */
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-slate-50 text-slate-800">
-      {/* Header */}
+      {/* Header com sigla */}
       <header className="sticky top-0 z-40 backdrop-blur bg-white/80 border-b">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -660,13 +483,10 @@ export default function AppPage() {
               {LOGO_SIGLA}
             </div>
             <h1 className="font-bold text-xl">Cestas Fit</h1>
-            <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700 ml-2">
-              Multimercado
-            </span>
+            <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700 ml-2">Multimercado</span>
           </div>
           <div className="ml-auto text-sm text-slate-600">
-            {currentRegion.city}/{currentRegion.state} • logística{" "}
-            {(currentRegion.deliveryAdj * 100).toFixed(1)}%
+            {currentRegion.city}/{currentRegion.state} • logística {(currentRegion.deliveryAdj * 100).toFixed(1)}%
           </div>
         </div>
       </header>
@@ -676,59 +496,40 @@ export default function AppPage() {
         <div className="grid md:grid-cols-2 gap-6 items-center">
           <div>
             <h2 className="text-3xl md:text-4xl font-bold leading-tight">
-              Monte sua cesta por{" "}
-              <span className="text-emerald-700">categoria</span> e encontre o{" "}
-              <span className="text-emerald-700">mercado mais barato</span>
+              Monte sua cesta por <span className="text-emerald-700">categoria</span> e encontre o
+              <span className="text-emerald-700"> mercado mais barato</span>
             </h2>
             <p className="mt-3 text-slate-600">
-              Escolha seus itens livremente — o sistema compara <b>Mundial</b>,{" "}
-              <b>Guanabara</b> e <b>Assaí</b> na sua região e indica onde comprar
-              mais barato. Pressione <b>Enter</b> quando terminar.
+              Escolha seus itens livremente — o sistema compara <b>Mundial</b>, <b>Guanabara</b> e <b>Assaí</b> na sua
+              região e indica onde comprar mais barato. Pressione <b>Enter</b> quando terminar.
             </p>
           </div>
+
           <div className="bg-white border rounded-2xl p-4">
             <h3 className="font-semibold mb-2">Localização e Preferências</h3>
             <div className="grid md:grid-cols-3 gap-3">
               <div>
                 <label className="text-sm">País</label>
-                <select
-                  className="mt-1 w-full border rounded-md h-10 px-3"
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                >
+                <select className="mt-1 w-full border rounded-md h-10 px-3" value={country} onChange={(e) => setCountry(e.target.value)}>
                   {Array.from(new Set(REGIONS.map((r) => r.country))).map((c) => (
-                    <option key={c}>{c}</option>
+                    <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               </div>
               <div>
                 <label className="text-sm">Estado</label>
-                <select
-                  className="mt-1 w-full border rounded-md h-10 px-3"
-                  value={stateUF}
-                  onChange={(e) => setStateUF(e.target.value)}
-                >
-                  {Array.from(
-                    new Set(
-                      REGIONS.filter((r) => r.country === country).map((r) => r.state)
-                    )
-                  ).map((s) => (
-                    <option key={s}>{s}</option>
+                <select className="mt-1 w-full border rounded-md h-10 px-3" value={stateUF} onChange={(e) => setStateUF(e.target.value)}>
+                  {Array.from(new Set(REGIONS.filter((r) => r.country === country).map((r) => r.state))).map((s) => (
+                    <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
               </div>
               <div>
                 <label className="text-sm">Cidade</label>
-                <select
-                  className="mt-1 w-full border rounded-md h-10 px-3"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                >
-                  {REGIONS.filter((r) => r.country === country && r.state === stateUF).map(
-                    (r) => (
-                      <option key={r.code}>{r.city}</option>
-                    )
-                  )}
+                <select className="mt-1 w-full border rounded-md h-10 px-3" value={city} onChange={(e) => setCity(e.target.value)}>
+                  {REGIONS.filter((r) => r.country === country && r.state === stateUF).map((r) => (
+                    <option key={r.code} value={r.city}>{r.city}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -736,11 +537,7 @@ export default function AppPage() {
             <div className="grid md:grid-cols-2 gap-3 mt-3">
               <div>
                 <label className="text-sm">Faixa de Preço</label>
-                <select
-                  className="mt-1 w-full border rounded-md h-10 px-3"
-                  value={tier}
-                  onChange={(e) => setTier(e.target.value as PriceTier)}
-                >
+                <select className="mt-1 w-full border rounded-md h-10 px-3" value={tier} onChange={(e) => setTier(e.target.value as PriceTier)}>
                   <option value="low">Low Price</option>
                   <option value="mid">Médio</option>
                   <option value="high">Premium (cesta automática)</option>
@@ -748,16 +545,8 @@ export default function AppPage() {
               </div>
               <div>
                 <label className="text-sm">Qualidade mínima</label>
-                <select
-                  className="mt-1 w-full border rounded-md h-10 px-3"
-                  value={String(minQuality)}
-                  onChange={(e) => setMinQuality(Number(e.target.value))}
-                >
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <option key={n} value={n}>
-                      {n}/5
-                    </option>
-                  ))}
+                <select className="mt-1 w-full border rounded-md h-10 px-3" value={String(minQuality)} onChange={(e) => setMinQuality(Number(e.target.value))}>
+                  {[1,2,3,4,5].map((n) => <option key={n} value={n}>{n}/5</option>)}
                 </select>
               </div>
             </div>
@@ -765,22 +554,14 @@ export default function AppPage() {
             <div className="grid md:grid-cols-2 gap-3 mt-3">
               <div>
                 <label className="text-sm">Entrega</label>
-                <select
-                  className="mt-1 w-full border rounded-md h-10 px-3"
-                  value={delivery}
-                  onChange={(e) => setDelivery(e.target.value as any)}
-                >
+                <select className="mt-1 w-full border rounded-md h-10 px-3" value={delivery} onChange={(e) => setDelivery(e.target.value as any)}>
                   <option value="retirada">Retirar na loja (separação pelo mercado)</option>
                   <option value="entrega">Entrega em casa (+5%)</option>
                 </select>
               </div>
               <div>
                 <label className="text-sm">Pagamento</label>
-                <select
-                  className="mt-1 w-full border rounded-md h-10 px-3"
-                  value={payment}
-                  onChange={(e) => setPayment(e.target.value as any)}
-                >
+                <select className="mt-1 w-full border rounded-md h-10 px-3" value={payment} onChange={(e) => setPayment(e.target.value as any)}>
                   <option value="picpay">PicPay</option>
                   <option value="credito">Cartão de Crédito</option>
                   <option value="debito">Cartão de Débito</option>
@@ -793,7 +574,7 @@ export default function AppPage() {
         </div>
       </section>
 
-      {/* BUSCA e ABAS */}
+      {/* BUSCA e ABAS de categorias de vitrine */}
       <section className="max-w-6xl mx-auto px-4">
         <div className="bg-white border rounded-2xl p-4">
           <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -816,20 +597,18 @@ export default function AppPage() {
             />
           </div>
 
-          {/* Cards de produtos */}
+          {/* Cards de produtos (até 36) */}
           <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {filtered.map((p) => (
               <div key={p.id} className="border rounded-xl p-3 bg-white">
                 <div className="font-medium leading-tight">{p.name}</div>
                 <div className="text-xs text-slate-500">
-                  {p.brand} • {p.unit} • {groupForUI(p.category)} • Qual {p.quality}/5
+                  {p.brand} • {p.unit} • {toUiGroup(p.category)} • Qual {p.quality}/5
                 </div>
                 <div className="mt-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500">a partir de</span>
-                    <span className="font-semibold">
-                      {currency(minEffectivePrice(p, currentRegion, skuPriceDb))}
-                    </span>
+                    <span className="font-semibold">{currency(minPriceAcrossMarkets(p, currentRegion))}</span>
                   </div>
                 </div>
                 <div className="mt-3 flex gap-2">
@@ -842,25 +621,18 @@ export default function AppPage() {
                 </div>
               </div>
             ))}
-            {filtered.length === 0 && (
-              <div className="text-sm text-slate-500 p-6">
-                Nada encontrado com esses filtros.
-              </div>
-            )}
           </div>
         </div>
       </section>
 
-      {/* CESTA + Totais */}
+      {/* CESTA personalizada + cálculo por mercado */}
       <section id="cesta" className="max-w-6xl mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Cesta */}
           <div className="lg:col-span-2 bg-white border rounded-2xl p-4">
             <h3 className="font-semibold mb-3">Sua cesta (escolha livre)</h3>
             {basketDetail.items.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                Adicione produtos para ver os totais por mercado.
-              </p>
+              <p className="text-sm text-slate-500">Adicione produtos para ver os totais por mercado.</p>
             ) : (
               <div className="space-y-3">
                 {basketDetail.items.map(({ product, qty, prices }) => (
@@ -869,76 +641,73 @@ export default function AppPage() {
                       <div>
                         <div className="font-medium leading-tight">{product.name}</div>
                         <div className="text-xs text-slate-500">
-                          {product.brand} • {product.unit} • {groupForUI(product.category)}
+                          {product.brand} • {product.unit} • {toUiGroup(product.category)}
                         </div>
                       </div>
-                      <button
-                        className="text-red-600"
-                        onClick={() => removeItem(product.id)}
-                      >
+
+                      <button className="text-red-600" onClick={() => removeItem(product.id)}>
                         remover
                       </button>
                     </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <button
-                        className="border rounded px-3 h-9"
-                        onClick={() => changeQty(product.id, -1)}
-                      >
+
+                    {/* Controles de quantidade */}
+                    <div className="mt-3 flex items-center gap-2">
+                      <button className="border rounded px-3 h-8" onClick={() => changeQty(product.id, -1)}>
                         -
                       </button>
-                      <div className="w-10 text-center">{qty}</div>
-                      <button
-                        className="border rounded px-3 h-9"
-                        onClick={() => changeQty(product.id, +1)}
-                      >
+                      <span className="text-sm">{qty}</span>
+                      <button className="border rounded px-3 h-8" onClick={() => changeQty(product.id, 1)}>
                         +
                       </button>
-                      <div className="ml-auto text-sm text-slate-600">
-                        {(MARKETS as Market[]).map((m) => (
-                          <span key={m} className="inline-block min-w-[120px]">
-                            {m}: <b>{currency(prices[m])}</b>
-                          </span>
-                        ))}
-                      </div>
+                    </div>
+
+                    {/* Preços por mercado */}
+                    <div className="mt-3 grid sm:grid-cols-3 gap-2 text-sm">
+                      {(MARKETS as Market[]).map((m) => (
+                        <div key={m} className="rounded border p-2">
+                          <div className="text-slate-500">{m}</div>
+                          <div className="font-semibold">{currency(prices[m])}</div>
+                          <div className="text-xs">Subtotal: {currency(prices[m] * qty)}</div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white rounded px-4 h-10 disabled:opacity-50"
+                    onClick={runCheapest}
+                    disabled={!basket.length}
+                  >
+                    Encontrar mercado mais barato (Enter)
+                  </button>
+                  {basket.length > 0 && (
+                    <span className="text-xs text-slate-500">
+                      Dica: pressione <b>Enter</b> para calcular rapidamente.
+                    </span>
+                  )}
+                </div>
               </div>
             )}
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded px-4 h-10 disabled:opacity-50"
-                onClick={runCheapest}
-                disabled={!basket.length}
-              >
-                Encontrar mercado mais barato (Enter)
-              </button>
-              {basket.length > 0 && (
-                <span className="text-xs text-slate-500">
-                  Dica: pressione <b>Enter</b> para calcular rapidamente.
-                </span>
-              )}
-            </div>
           </div>
 
-          {/* Totais por mercado + Mapas */}
+          {/* Totais por mercado + mapas */}
           <div className="bg-white border rounded-2xl p-4">
             <h3 className="font-semibold mb-3">Totais por mercado</h3>
             <div className="grid gap-3">
               {(MARKETS as Market[]).map((m) => (
                 <div
                   key={m}
-                  className={`rounded-xl border p-3 ${
-                    basketDetail.winner === m && basket.length ? "border-emerald-500" : ""
-                  }`}
+                  className={
+                    "rounded-xl border p-3 " +
+                    (basketDetail.winner === m && basket.length ? "border-emerald-500" : "")
+                  }
                 >
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-sm text-slate-500">{m}</div>
-                      <div className="text-2xl font-bold">
-                        {currency(basketDetail.totals[m] || 0)}
-                      </div>
+                      <div className="text-2xl font-bold">{currency(basketDetail.totals[m] || 0)}</div>
                       {basketDetail.winner === m && basket.length ? (
                         <div className="text-xs text-emerald-700 mt-1">▼ Mais barato</div>
                       ) : null}
@@ -966,16 +735,12 @@ export default function AppPage() {
         <section id="resultado" className="max-w-6xl mx-auto px-4 pb-10">
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
             <p className="text-sm">
-              <b>Resultado:</b> Para a sua cesta, o mercado mais barato é{" "}
-              <b>{basketDetail.winner}</b> com total de{" "}
-              <b>{currency(basketDetail.totals[basketDetail.winner])}</b>{" "}
+              <b>Resultado:</b> Para a sua cesta, o mercado mais barato é <b>{basketDetail.winner}</b> com total de
+              <b> {currency(basketDetail.totals[basketDetail.winner])}</b>{" "}
               {delivery === "entrega" ? "(inclui 5% de entrega)" : ""}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                className="bg-slate-900 hover:bg-slate-800 text-white rounded px-4 h-10"
-                onClick={doCheckout}
-              >
+              <button className="bg-slate-900 hover:bg-slate-800 text-white rounded px-4 h-10" onClick={doCheckout}>
                 Pagar agora (simulado)
               </button>
               <a
@@ -988,28 +753,24 @@ export default function AppPage() {
               </a>
             </div>
             <p className="text-xs text-slate-600 mt-2">
-              * Integrações reais: PicPay (Checkout API), Cartões (Stripe/Mercado
-              Pago), PIX (Copia e Cola), Cartão Alimentação (Alelo/VR). Este botão
-              gera um JSON do pedido para demonstração.
+              * Integrações reais: PicPay (Checkout API), Cartões (Stripe/Mercado Pago), PIX (Copia e Cola), Cartão
+              Alimentação (Alelo/VR). Este botão gera um JSON do pedido para demonstração.
             </p>
           </div>
         </section>
       )}
 
-      {/* Modal de confirmação */}
+      {/* Modal de confirmação simples */}
       {showCheckout && (
         <div className="fixed inset-0 bg-black/40 grid place-items-center">
           <div className="bg-white rounded-2xl p-6 w-[95%] max-w-xl border">
             <h4 className="font-semibold text-lg">Pagamento iniciado</h4>
             <p className="text-sm text-slate-600 mt-1">
-              Método: <b>{payment.toUpperCase()}</b>. Você pode plugar o gateway real
-              aqui. Um arquivo <i>pedido.json</i> foi baixado com os dados.
+              Método: <b>{payment.toUpperCase()}</b>. Você pode plugar o gateway real aqui. Um arquivo <i>pedido.json</i>{" "}
+              foi baixado com os dados.
             </p>
             <div className="mt-4 flex justify-end">
-              <button
-                className="border rounded px-4 h-10"
-                onClick={() => setShowCheckout(false)}
-              >
+              <button className="border rounded px-4 h-10" onClick={() => setShowCheckout(false)}>
                 Fechar
               </button>
             </div>
@@ -1021,8 +782,8 @@ export default function AppPage() {
         <div className="max-w-6xl mx-auto px-4 py-8 text-sm text-slate-600">
           <p className="font-medium">Cestas Fit • {LOGO_SIGLA}</p>
           <p>
-            Pagamentos: PicPay, Cartões, PIX, Cartão Alimentação (demo). Entrega
-            opcional com taxa de 5%. Links de mapas leves para não travar o app.
+            Pagamentos: PicPay, Cartões, PIX, Cartão Alimentação (demo). Entrega opcional com taxa de 5%. Links de
+            mapas leves para não travar o app.
           </p>
         </div>
       </footer>
